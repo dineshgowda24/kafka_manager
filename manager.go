@@ -2,6 +2,7 @@ package kafka_manager
 
 import (
 	"context"
+	"strings"
 	"sync"
 	"time"
 
@@ -11,31 +12,30 @@ import (
 type KafkaManager struct {
 	sync.Mutex
 	wg              *sync.WaitGroup
-	producers       map[string]*kafka.Writer
-	consumers       map[string]*kafka.Reader
-	producerSetting []*ProducerSetting
-	consumerSetting []*ConsumerSetting
-	initialized     bool
-	brokers         []string
+	producers       map[string]*kafka.Writer // Topic to Writer map
+	consumers       map[string]*kafka.Reader // Topic to Reader map
+	producerSetting []*ProducerSetting       // Producer Setting for Topic
+	consumerSetting []*ConsumerSetting       // Consumer Setting for Topic
+	initialized     bool                     // Indicates if manager is running
 }
 
 type Callback func(reader *kafka.Reader, wg *sync.WaitGroup)
 
 type ProducerSetting struct {
-	Topic        string
-	Compression  kafka.Compression
-	RequiredAcks kafka.RequiredAcks
-	BatchTimeout time.Duration
-	BatchSize    int
-	Brokers      []string
+	Topic        string             // Topic name
+	Compression  kafka.Compression  // Message Compression type
+	RequiredAcks kafka.RequiredAcks // Acknowledgement type
+	BatchTimeout time.Duration      // Flush queued after batch timeout
+	BatchSize    int                // Number of msgs in a batch
+	Brokers      []string           // List of brokers
 }
 
 type ConsumerSetting struct {
-	Topic          string
-	GroupID        string
-	Callback       Callback
-	CommitInterval time.Duration
-	Brokers        []string
+	Topic          string        // Topic name
+	GroupID        string        // Group ID of the consumer
+	Callback       Callback      // Callback handler for processing msg
+	CommitInterval time.Duration // Commit messages after
+	Brokers        []string      // List of brokers
 }
 
 func DefaultProducerSetting(topic string) *ProducerSetting {
@@ -43,7 +43,7 @@ func DefaultProducerSetting(topic string) *ProducerSetting {
 		Brokers:      []string{"localhost"},
 		Compression:  kafka.Snappy,
 		RequiredAcks: kafka.RequireAll,
-		BatchSize:    100,
+		BatchSize:    10,
 		BatchTimeout: 20 * time.Millisecond,
 		Topic:        topic,
 	}
@@ -68,36 +68,75 @@ func NewKafkaManager() *KafkaManager {
 	}
 }
 
-func (f *KafkaManager) connect() {
-	f.Lock()
-	defer f.Unlock()
-	f.setUpConsumers()
-	f.setUpProducers()
-	f.initialized = true
-}
-
 func (f *KafkaManager) AddConsumer(c *ConsumerSetting) error {
 	if f.initialized {
 		// Can not add while consumers are already setup
 		return ErrKafkaManagerAlreadyInitialized
 	}
+
+	if err := validateConsumerSetting(c); err != nil {
+		return err
+	}
 	f.consumerSetting = append(f.consumerSetting, c)
+	if err := f.initConsumer(c); err != nil {
+		return err
+	}
 	return nil
 }
 
-func (f *KafkaManager) AddProducer(c *ProducerSetting) error {
+func validateConsumerSetting(c *ConsumerSetting) error {
+	if strings.TrimSpace(c.Topic) == "" {
+		return ErrEmptyTopic
+	}
+	return nil
+}
+
+func (f *KafkaManager) initConsumer(c *ConsumerSetting) error {
+	_, ok := f.consumers[c.Topic]
+	if ok {
+		return ErrTopicAlreadyInitialized
+	}
+	f.consumers[c.Topic] = getNewReader(c)
+	return nil
+}
+
+func (f *KafkaManager) AddProducer(p *ProducerSetting) error {
 	if f.initialized {
 		// Can not add while consumers are already setup
 		return ErrKafkaManagerAlreadyInitialized
 	}
-	f.producerSetting = append(f.producerSetting, c)
+	if err := validateProducerSetting(p); err != nil {
+		return err
+	}
+	f.producerSetting = append(f.producerSetting, p)
+	if err := f.initProducer(p); err != nil {
+		return err
+	}
+	return nil
+}
+
+func validateProducerSetting(p *ProducerSetting) error {
+	if strings.TrimSpace(p.Topic) == "" {
+		return ErrEmptyTopic
+	}
+	if len(p.Brokers) == 0 {
+		p.Brokers = []string{"localhost"}
+	}
+	return nil
+}
+
+func (f *KafkaManager) initProducer(p *ProducerSetting) error {
+	_, ok := f.producers[p.Topic]
+	if ok {
+		return ErrTopicAlreadyInitialized
+	}
+	f.producers[p.Topic] = getNewWriter(p)
 	return nil
 }
 
 func (f *KafkaManager) Produce(ctx context.Context, topic, key string, msg []byte) (bool, error) {
 	f.Lock()
 	defer f.Unlock()
-	f.setUpProducers()
 	w, ok := f.producers[topic]
 	if !ok {
 		//return topic not found error
@@ -117,7 +156,6 @@ func (f *KafkaManager) Produce(ctx context.Context, topic, key string, msg []byt
 }
 
 func (f *KafkaManager) Consume() {
-	f.connect()
 	for _, c := range f.consumerSetting {
 		reader, ok := f.consumers[c.Topic]
 		if ok {
@@ -134,30 +172,6 @@ func (f *KafkaManager) Disconnect() {
 	}
 	for _, c := range f.consumers {
 		c.Close()
-	}
-}
-
-func (f *KafkaManager) setUpProducers() {
-	if len(f.producers) == len(f.producerSetting) {
-		return
-	}
-	for _, s := range f.producerSetting {
-		_, ok := f.producers[s.Topic]
-		if !ok {
-			f.producers[s.Topic] = getNewWriter(s)
-		}
-	}
-}
-
-func (f *KafkaManager) setUpConsumers() {
-	if len(f.consumers) == len(f.consumerSetting) {
-		return
-	}
-	for _, s := range f.consumerSetting {
-		_, ok := f.consumers[s.Topic]
-		if !ok {
-			f.consumers[s.Topic] = getNewReader(s)
-		}
 	}
 }
 
