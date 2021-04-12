@@ -8,22 +8,29 @@ import (
 
 	"github.com/dineshgowda24/kafka_manager"
 	"github.com/segmentio/kafka-go"
+	"github.com/sirupsen/logrus"
 )
 
 func main() {
-	manager := kafka_manager.NewKafkaManager()
-	manager.AddProducer(kafka_manager.DefaultProducerSetting("ping_pong"))
-	c := kafka_manager.DefaultConsumerSetting("ping_pong")
-	c.Callback = handleMsg(manager)
-	c.GroupID = "ping_pong_grp"
-	manager.AddConsumer(c)
-	manager.Consume()
+	mgr := kafka_manager.NewKafkaManager()
+	mgr.AddProducer(kafka_manager.DefaultProducerSetting("ping_pong"))
+	mgr.AddConsumer(&kafka_manager.ConsumerSetting{
+		Topic:    "ping_pong",
+		GroupID:  "ping_pong_grp",
+		Brokers:  []string{"localhost"},
+		Callback: handleMsg(mgr),
+	})
+	// blocking call
+	mgr.Consume()
 }
 
 func handleMsg(m *kafka_manager.KafkaManager) kafka_manager.Callback {
 
+	logrus.SetFormatter(&logrus.TextFormatter{}) // Do not use this in production
+	lgr := logrus.StandardLogger()
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
+	lgr.Info("Started producing 1st msg")
 	_, err := m.Produce(ctx, "ping_pong", "", []byte("Ping Pong..."))
 	if err != nil {
 		panic(err)
@@ -39,17 +46,17 @@ func handleMsg(m *kafka_manager.KafkaManager) kafka_manager.Callback {
 			defer cancel()
 			_, err = m.Produce(ctx, "ping_pong", "", []byte("Ping Pong..."))
 			if err != nil {
-				panic(err)
+				lgr.WithError(err).Fatal(err)
 			}
 
 			msg, err := reader.FetchMessage(context.Background())
 			if err != nil {
-				panic(err)
+				lgr.WithError(err).Fatal(err)
 			}
-			fmt.Println(fmt.Sprintf("Received a new msg with partition [%d] offset [%d] : %s", msg.Partition, msg.Offset, string(msg.Value)))
+			lgr.Info(fmt.Sprintf("Received a new msg with partition [%d] offset [%d] : %s", msg.Partition, msg.Offset, string(msg.Value)))
 
 			if err := reader.CommitMessages(context.Background(), msg); err != nil {
-				panic(err)
+				lgr.WithError(err).Fatal(err)
 			}
 		}
 		wg.Done()
