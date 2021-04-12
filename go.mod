@@ -1,4 +1,4 @@
-module github.com/dineshgowda24/KafkaManager
+module github.com/dineshgowda24/kafka_manager
 
 go 1.15
 
