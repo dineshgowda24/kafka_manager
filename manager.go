@@ -2,7 +2,6 @@ package kafka_manager
 
 import (
 	"context"
-	"fmt"
 	"sync"
 	"time"
 
@@ -53,8 +52,8 @@ func DefaultProducerSetting(topic string) *ProducerSetting {
 func DefaultConsumerSetting(topic string) *ConsumerSetting {
 	return &ConsumerSetting{
 		Brokers:        []string{"localhost"},
-		CommitInterval: 10 * time.Millisecond,
 		Topic:          topic,
+		CommitInterval: 0,
 	}
 }
 
@@ -145,7 +144,6 @@ func (f *KafkaManager) setUpProducers() {
 	for _, s := range f.producerSetting {
 		_, ok := f.producers[s.Topic]
 		if !ok {
-			fmt.Println("Setting up new producer")
 			f.producers[s.Topic] = getNewWriter(s)
 		}
 	}

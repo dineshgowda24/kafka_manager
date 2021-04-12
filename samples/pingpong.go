@@ -15,6 +15,7 @@ func main() {
 	manager.AddProducer(kafka_manager.DefaultProducerSetting("ping_pong"))
 	c := kafka_manager.DefaultConsumerSetting("ping_pong")
 	c.Callback = handleMsg(manager)
+	c.GroupID = "ping_pong_grp"
 	manager.AddConsumer(c)
 	manager.Consume()
 }
@@ -23,7 +24,7 @@ func handleMsg(m *kafka_manager.KafkaManager) kafka_manager.Callback {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	_, err := m.Produce(ctx, "ping_pong", "", []byte("Ping..."))
+	_, err := m.Produce(ctx, "ping_pong", "", []byte("Ping Pong..."))
 	if err != nil {
 		panic(err)
 	}
@@ -31,22 +32,26 @@ func handleMsg(m *kafka_manager.KafkaManager) kafka_manager.Callback {
 		count := 0
 		for {
 			count += 1
-			//time.Sleep(time.Second * 2)
-			if count > 100000 {
-				return
+			if count > 100 {
+				break
 			}
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
-			_, err = m.Produce(ctx, "ping_pong", "", []byte("Ping..."))
+			_, err = m.Produce(ctx, "ping_pong", "", []byte("Ping Pong..."))
 			if err != nil {
 				panic(err)
 			}
 
-			msg, err := reader.ReadMessage(context.Background())
+			msg, err := reader.FetchMessage(context.Background())
 			if err != nil {
 				panic(err)
 			}
 			fmt.Println(fmt.Sprintf("Received a new msg with partition [%d] offset [%d] : %s", msg.Partition, msg.Offset, string(msg.Value)))
+
+			if err := reader.CommitMessages(context.Background(), msg); err != nil {
+				panic(err)
+			}
 		}
+		wg.Done()
 	}
 }
