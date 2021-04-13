@@ -134,7 +134,7 @@ func (f *KafkaManager) initProducer(p *ProducerSetting) error {
 	return nil
 }
 
-func (f *KafkaManager) Produce(ctx context.Context, topic, key string, msg []byte) (bool, error) {
+func (f *KafkaManager) Produce(ctx context.Context, topic string, key, msg []byte) (bool, error) {
 	f.Lock()
 	defer f.Unlock()
 	w, ok := f.producers[topic]
@@ -143,7 +143,7 @@ func (f *KafkaManager) Produce(ctx context.Context, topic, key string, msg []byt
 		return false, ErrTopicNotInitialized
 	}
 	if err := w.WriteMessages(ctx, kafka.Message{
-		Key:   []byte(key),
+		Key:   key,
 		Value: msg,
 	}); err != nil {
 		er, ok := err.(*kafka.Error)
@@ -166,13 +166,16 @@ func (f *KafkaManager) Consume() {
 	f.wg.Wait()
 }
 
-func (f *KafkaManager) Disconnect() {
-	for _, p := range f.producers {
-		p.Close()
-	}
-	for _, c := range f.consumers {
-		c.Close()
-	}
+func (f *KafkaManager) Close(grace time.Timer) {
+	go func() {
+		<-grace.C
+		for _, p := range f.producers {
+			p.Close()
+		}
+		for _, c := range f.consumers {
+			c.Close()
+		}
+	}()
 }
 
 func getNewWriter(s *ProducerSetting) *kafka.Writer {
