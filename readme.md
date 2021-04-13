@@ -1,6 +1,6 @@
 ## Kafka Manager
 
-Formalises eventing between microservices using kafka and reduces kafka client's API significantly.
+Simplifies eventing between microservices using kafka and reduces kafka client's API significantly.
 
 ### Motivation
 
