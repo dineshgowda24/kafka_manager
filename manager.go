@@ -57,7 +57,7 @@ type ConsumerSettings struct {
 }
 
 // Callback handler to read messages from reader ie Kafka
-type Callback func(reader *kafka.Reader, wg *sync.WaitGroup)
+type Callback func(*kafka.Reader, *sync.WaitGroup, chan *kafka.Message)
 
 // DefaultSettings returns default settings
 func DefaultSettings() *Settings {
@@ -176,7 +176,7 @@ func (f *KafkaManager) Consume() {
 		reader, ok := f.consumers[c.Topic]
 		if ok {
 			f.wg.Add(1)
-			go c.Callback(reader, f.wg)
+			go c.Callback(reader, f.wg, f.requeue)
 		}
 	}
 	f.wg.Wait()

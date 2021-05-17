@@ -12,7 +12,7 @@ import (
 )
 
 func main() {
-	mgr , err:= kafka_manager.New(kafka_manager.DefaultSettings())
+	mgr, err := kafka_manager.New(kafka_manager.DefaultSettings())
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -23,7 +23,7 @@ func main() {
 		}
 	}
 
-	cb := func(reader *kafka.Reader, wg *sync.WaitGroup) {
+	cb := func(reader *kafka.Reader, wg *sync.WaitGroup, requeue chan *kafka.Message) {
 		log.Println("Started to consume")
 		count := 0
 		for {
