@@ -2,3 +2,4 @@
 kafka_manager
 vendor
 .env
+.virtual
