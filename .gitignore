@@ -1,3 +1,5 @@
 .idea
 kafka_manager
 vendor
+.env
+.virtual

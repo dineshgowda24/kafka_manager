@@ -1,8 +1,8 @@
-## Kafka Manager
+# Kafka Manager  
 
 Simplifies eventing between microservices using kafka and reduces kafka client's API significantly.
 
-### Motivation
+## Motivation
 
 There is already a wonderful library for cloud events in [go](https://github.com/cloudevents/sdk-go)
 But the current state kafka client libraries in go is little chaotic. There are multiple libraries for kafka clients in go,
